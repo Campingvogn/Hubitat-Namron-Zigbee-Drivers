@@ -1,10 +1,9 @@
 /**
     Zigbee Hubitat driver for Namrom Panelovn.
-    Version: 0.22
+    Version: 0.23
     Date: 30.april.2024
     Author: Tjomp
 */
-
 
 metadata {
    definition (name: "Namron Zigbee Panelovn", namespace: "Tjomp", author: "Tjomp") {
@@ -12,6 +11,7 @@ metadata {
       capability "ThermostatHeatingSetpoint"
       capability "ThermostatOperatingState"
       capability "ThermostatFanMode"
+      capability "ThermostatMode"
       //capability "Thermostat"
       capability "PowerMeter"
       capability "Refresh"
@@ -42,7 +42,7 @@ def configure() {
     
     cmds += zigbee.configureReporting(0x201, 0x0000, 0x29, 10, pollRate.intValue())
     cmds += zigbee.configureReporting(0xB04, 0x050B, 0x29, 10, pollRate.intValue())
-    log.debug "Configuring thermostat"
+    log.debug "Configuring thermostat - Driver version : 0.23"
     return cmds + refresh()
 }
 
@@ -60,7 +60,7 @@ def updated() {
 def parse(String description) {
     def descMap = zigbee.parseDescriptionAsMap(description)
     def map = [:]
-
+    log.debug "Parse: $description"
     if (description?.startsWith("read attr -")) {
         if (descMap.cluster == "0201" && descMap.attrId == "0000")
         {
@@ -109,18 +109,18 @@ def refresh() {
     cmds += zigbee.readAttribute(0x201, 0x0012) //Read OccupiedHeatingSetpoint
     
     cmds += zigbee.readAttribute(0x0b04, 0x050b) // Read ActivePower 
+    log.debug "refreshed"
     return cmds
 }   
 
 def setHeatingSetpoint(temperature) {
+    log.debug "Set new heatingpoint?"
     if (temperature != null) {
         def scale = getTemperatureScale()
-        //log.debug "Local scale: $scale"
-        //log.debug "Setting temperature: $temperature"
         def degrees = new BigDecimal(temperature).setScale(1, BigDecimal.ROUND_HALF_UP)
         def celsius = (scale == "C") ? degrees as Float : (fahrenheitToCelsius(degrees) as Float).round(2)
         int celsius100 = Math.round(celsius * 100)
-        
+        log.debug "Setting temperature: $celsius100\\100 in $scale"
         zigbee.writeAttribute(0x201, 0x0012, 0x29, celsius100)
     }
 }
@@ -148,7 +148,6 @@ def setThermostatMode(mode) {
 def setThermostatFanMode(mode) {
      sendEvent(name:"thermostatFanMode", value:mode)
 }
-
 def fanAuto() {
     log.debug "fanAuto not applicable"
 }
