@@ -1,7 +1,7 @@
 /**
     Zigbee Hubitat driver for Namrom Panelovn.
-    Version: 0.2
-    Date: 29.april.2024
+    Version: 0.21
+    Date: 30.april.2024
     Author: Tjomp
 */
 
@@ -12,13 +12,13 @@ metadata {
       capability "ThermostatHeatingSetpoint"
       capability "ThermostatOperatingState"
       capability "ThermostatFanMode"
+      capability "Thermostat"
       capability "PowerMeter"
       capability "Refresh"
       capability "Configuration"
 
-      command "increaseHeatSetpoint"
-      command "decreaseHeatSetpoint"
       command "setThermostatFanMode", [[name:"Thermostat mode*","type":"ENUM","description":"Thermostat mode to set","constraints":["off"]]]
+      command "setThermostatMode", [[name:"Thermostat mode*","type":"ENUM","description":"Thermostat mode to set","constraints":["heat"]]]
 
    }
 
@@ -34,15 +34,15 @@ def installed() {
 
 def configure() {
 
-    sendEvent(name: "thermostatFanMode", value:"auto")
+    sendEvent(name: "thermostatFanMode", value:"off")
     setThermostatMode("heat")
     sendEvent(name: "supportedThermostatModes", value:"heat,idle")
-    sendEvent(name: "supportedThermostatFanModes", value:"")
+    sendEvent(name: "supportedThermostatFanModes", value:"off")
     
     def cmds = ["zdo bind 0x${device.deviceNetworkId} 1 0x019 0x201 {${device.zigbeeId}} {}", "delay 200",]
     
-    cmds += zigbee.configureReporting(0x201, 0x0000, 0x29, 10, pollRate)
-    cmds += zigbee.configureReporting(0xB04, 0x050B, 0x29, 10, pollRate)
+    cmds += zigbee.configureReporting(0x201, 0x0000, 0x29, 10, pollRate.intValue())
+    cmds += zigbee.configureReporting(0xB04, 0x050B, 0x29, 10, pollRate.intValue())
     return cmds + refresh()
 
 }
@@ -145,17 +145,6 @@ def getTemperature(value) {
         }
     }
 }
-def increaseHeatSetpoint() {
-    def currentSetpoint = device.currentValue("heatingSetpoint")
-    currentSetpoint = currentSetpoint + 1
-    setHeatingSetpoint(currentSetpoint) 
-}
-
-def decreaseHeatSetpoint() {
-    def currentSetpoint = device.currentValue("heatingSetpoint")
-    currentSetpoint = currentSetpoint - 1
-    setHeatingSetpoint(currentSetpoint) 
-}
 
 def setThermostatMode(mode) {
      sendEvent(name:"thermostatMode", value:mode)
@@ -167,9 +156,5 @@ def setThermostatOperatingState(state) {
 }
 
 def setThermostatFanMode(mode) {
-     sendEvent(name:"thermostatFanMode", "off")
+     sendEvent(name:"thermostatFanMode", value:mode)
 }
-
-def fanAuto() {}
-def fanCirculate() {}
-def fanOn() {}
