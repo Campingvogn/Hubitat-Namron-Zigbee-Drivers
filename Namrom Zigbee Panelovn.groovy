@@ -1,6 +1,6 @@
 /**
     Zigbee Hubitat driver for Namrom Panelovn.
-    Version: 0.21
+    Version: 0.22
     Date: 30.april.2024
     Author: Tjomp
 */
@@ -12,7 +12,7 @@ metadata {
       capability "ThermostatHeatingSetpoint"
       capability "ThermostatOperatingState"
       capability "ThermostatFanMode"
-      capability "Thermostat"
+      //capability "Thermostat"
       capability "PowerMeter"
       capability "Refresh"
       capability "Configuration"
@@ -33,8 +33,7 @@ def installed() {
 }
 
 def configure() {
-
-    sendEvent(name: "thermostatFanMode", value:"off")
+    setThermostatFanMode("off")
     setThermostatMode("heat")
     sendEvent(name: "supportedThermostatModes", value:"heat,idle")
     sendEvent(name: "supportedThermostatFanModes", value:"off")
@@ -43,19 +42,9 @@ def configure() {
     
     cmds += zigbee.configureReporting(0x201, 0x0000, 0x29, 10, pollRate.intValue())
     cmds += zigbee.configureReporting(0xB04, 0x050B, 0x29, 10, pollRate.intValue())
+    log.debug "Configuring thermostat"
     return cmds + refresh()
-
 }
-
-def getModeMap() { [
-    "00":"off",
-    "04":"heat",
-    "05":"eco"
-]}
-
-def getFanModeMap() {[
-    "00":"off",
-]}
 
 def updated() {
     def cmds = ["zdo bind 0x${device.deviceNetworkId} 1 0x019 0x201 {${device.zigbeeId}} {}", "delay 200",]
@@ -126,6 +115,8 @@ def refresh() {
 def setHeatingSetpoint(temperature) {
     if (temperature != null) {
         def scale = getTemperatureScale()
+        //log.debug "Local scale: $scale"
+        //log.debug "Setting temperature: $temperature"
         def degrees = new BigDecimal(temperature).setScale(1, BigDecimal.ROUND_HALF_UP)
         def celsius = (scale == "C") ? degrees as Float : (fahrenheitToCelsius(degrees) as Float).round(2)
         int celsius100 = Math.round(celsius * 100)
@@ -146,15 +137,27 @@ def getTemperature(value) {
     }
 }
 
-def setThermostatMode(mode) {
-     sendEvent(name:"thermostatMode", value:mode)
+def getTemperatureScale() {
+    return "${location.temperatureScale}"
 }
 
-def setThermostatOperatingState(state) {
-    if (state == "on") { state = "idle" }
-     sendEvent(name:"thermostatOperatingState", value:state)
+def setThermostatMode(mode) {
+     sendEvent(name:"thermostatMode", value:mode)
 }
 
 def setThermostatFanMode(mode) {
      sendEvent(name:"thermostatFanMode", value:mode)
 }
+
+def fanAuto() {
+    log.debug "fanAuto not applicable"
+}
+
+def fanCirculate() {
+        log.debug "fanCirculate not applicable"
+}
+
+def fanOn() {
+        log.debug "fanOn not applicable"
+}
+
