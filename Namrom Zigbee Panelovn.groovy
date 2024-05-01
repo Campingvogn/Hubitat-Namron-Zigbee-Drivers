@@ -1,7 +1,7 @@
 /**
     Zigbee Hubitat driver for Namrom Panelovn.
-    Version: 0.23
-    Date: 30.april.2024
+    Version: 0.24
+    Date: 1.may.2024
     Author: Tjomp
 */
 
@@ -40,9 +40,13 @@ def configure() {
     
     def cmds = ["zdo bind 0x${device.deviceNetworkId} 1 0x019 0x201 {${device.zigbeeId}} {}", "delay 200",]
     
-    cmds += zigbee.configureReporting(0x201, 0x0000, 0x29, 10, pollRate.intValue())
-    cmds += zigbee.configureReporting(0xB04, 0x050B, 0x29, 10, pollRate.intValue())
-    log.debug "Configuring thermostat - Driver version : 0.23"
+    cmds += zigbee.configureReporting(0x201, 0x0000, 0x29, 10, pollRate.intValue()) //LocalTemperature
+    cmds += zigbee.configureReporting(0x201, 0x0010, 0x29, 10, pollRate.intValue()) //LocalTemperatureCalibration
+    cmds += zigbee.configureReporting(0x201, 0x0012, 0x29, 10, pollRate.intValue()) //OccupiedHeatingSetpoint
+    cmds += zigbee.configureReporting(0xB04, 0x050B, 0x29, 10, pollRate.intValue()) //ActivePower
+
+    log.debug "Configuring thermostat - Driver version : 0.24"
+
     return cmds + refresh()
 }
 
@@ -60,8 +64,9 @@ def updated() {
 def parse(String description) {
     def descMap = zigbee.parseDescriptionAsMap(description)
     def map = [:]
-    log.debug "Parse: $description"
+    //log.debug "Parse: $description"
     if (description?.startsWith("read attr -")) {
+        log.debug "Cluster: $descMap.cluster - attrID: $descMap.attrId"
         if (descMap.cluster == "0201" && descMap.attrId == "0000")
         {
             map.name = "temperature"
@@ -106,15 +111,14 @@ def refresh() {
     
     cmds += zigbee.readAttribute(0x201, 0x0000) //Read LocalTemperature Attribute
     cmds += zigbee.readAttribute(0x201, 0x0010) //Read LocalTemperatureCalibration
-    cmds += zigbee.readAttribute(0x201, 0x0012) //Read OccupiedHeatingSetpoint
-    
+    cmds += zigbee.readAttribute(0x201, 0x0012) //Read OccupiedHeatingSetpoint 
     cmds += zigbee.readAttribute(0x0b04, 0x050b) // Read ActivePower 
     log.debug "refreshed"
     return cmds
 }   
 
 def setHeatingSetpoint(temperature) {
-    log.debug "Set new heatingpoint?"
+    //log.debug "Set new heatingpoint?"
     if (temperature != null) {
         def scale = getTemperatureScale()
         def degrees = new BigDecimal(temperature).setScale(1, BigDecimal.ROUND_HALF_UP)
