@@ -1,7 +1,7 @@
 /**
     Zigbee Hubitat driver for Namrom Panelovn.
-    Version: 0.25
-    Date: 1.may.2024
+    Version: 0.26
+    Date: 2.may.2024
     Author: Tjomp
 */
 
@@ -12,7 +12,6 @@ metadata {
       capability "ThermostatOperatingState"
       capability "PowerMeter"
       capability "Refresh"
-      capability "EnergyMeter"
       capability "Configuration"
    }
 
@@ -28,8 +27,7 @@ def installed() {
 
 def configure() {
      
-    def cmds = ["zdo bind 0x${device.deviceNetworkId} 1 0x019 0x201 {${device.zigbeeId}} {}", "delay 200",]
-
+    def cmds = ["zdo bind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x201 {${device.zigbeeId}} {}", "delay 200"]
     
     //cmds += zigbee.writeAttribute(0x0000, 0x00, 0x28, (byte) 0) //Reset to factory Defaults
     cmds += zigbee.writeAttribute(0x201, 0x001c, 0x30, (byte) 0x04) //Set SystemMode=Heat
@@ -38,16 +36,16 @@ def configure() {
     cmds += zigbee.configureReporting(0x201, 0x0010, 0x28, 10, pollRate.intValue()) //LocalTemperatureCalibration - int8S
     cmds += zigbee.configureReporting(0x201, 0x0012, 0x29, 10, pollRate.intValue()) //OccupiedHeatingSetpoint - int16S
     cmds += zigbee.configureReporting(0x201, 0x001c, 0x30, 10, pollRate.intValue()) //SystemMode - Enum8
-    cmds += zigbee.configureReporting(0xB04, 0x050B, 0x29, 10, pollRate.intValue()) //ActivePower - int16S
+    cmds += zigbee.configureReporting(0xB04, 0x050B, 0x29, 10, pollRate.intValue(),5) //ActivePower - int16S
 
-    log.info "Configuring thermostat - Driver version : 0.25"
-
+    log.info "Configuring thermostat - Driver version : 0.26"
+    //log.debug (cmds)
     return cmds + refresh()
 }
 
 def updated() {
-    def cmds = ["zdo bind 0x${device.deviceNetworkId} 1 0x019 0x201 {${device.zigbeeId}} {}", "delay 200",]
-
+     def cmds = [""]
+    
     if (tempCalibration != null) {
         tempCalibration = tempCalibration * 10
         cmds += zigbee.writeAttribute(0x201, 0x0010, 0x28, (byte) tempCalibration)
@@ -83,10 +81,10 @@ def parse(String description) {
             sendEvent(name:"SystemMode", value:map.value)
         }
         else if (descMap.cluster == "0B04" && descMap.attrId == "050B") {
-            //log.debug "Power: $descMap.value"
             def power = Math.round(Integer.parseInt(descMap.value, 16)/10)
             map.value = power
             sendEvent(name:"power", value:map.value)
+            log.debug "Power: $map.value"
 
             map.name = "thermostatOperatingState"
             if (power < 10) {
