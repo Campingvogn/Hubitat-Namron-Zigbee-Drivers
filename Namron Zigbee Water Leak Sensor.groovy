@@ -1,7 +1,7 @@
 /**
     Hubitat driver for Namron Zigbee Water leak sensor / Namron Zigbee vannlekkasjesensor
-    Version: 0.10
-    Date: 7.may.2024
+    Version: 0.15
+    Date: 15.june.2024
     Author: Tjomp
 */
 
@@ -36,7 +36,7 @@ def configure() {
     cmds += zigbee.configureReporting(0x0001, 0x0021, 0x20, 10, pollRate.intValue()) //Battery percentage remaining
     cmds += zigbee.configureReporting(0x0500, 0x0002, 0x19, 10, pollRate.intValue()) //Water sensor
 
-    if (verbose==true){log.info "Configuring Waterleak sensor - Driver version : 0.10"}
+    if (verbose==true){log.info "Configuring Waterleak sensor - Driver version : 0.15"}
     if (debug==true) {log.debug (cmds)}
     return cmds + refresh()
 }
@@ -91,5 +91,6 @@ def refresh() {
     cmds += zigbee.readAttribute(0x0001, 0x0021) //Read Battery percentage remaining
     cmds += zigbee.readAttribute(0x0500, 0x0002) //Read Water Sensor
     if (verbose==true){log.info "refreshed"}
+    runIn( pollRate, refresh, [overwrite: true])
     return cmds
 }   
