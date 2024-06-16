@@ -1,12 +1,14 @@
 /**
     Hubitat driver for Namron Zigbee Thermostat and Electric radiator / Namron Zigbee Termostat og panelovn.
-    Version: 0.30
-    Date: 15.june.2024
     Author: Tjomp
 */
 
+static String version() { "0.31" }
+static String releasedate() { "16.june.2024" }
+
 metadata {
    definition (name: "Namron Zigbee Thermostat", namespace: "Tjomp", author: "Tjomp") {
+      capability "Initialize"
       capability "TemperatureMeasurement"
       capability "ThermostatHeatingSetpoint"
       capability "ThermostatOperatingState"
@@ -23,26 +25,35 @@ metadata {
    }
 }
 
+// Run when driver is installed
 def installed() {
     def verbose=true
-    def debug=fale
+    def debug=false
     def tempCalibration=0
     def pollRate=120
     log.info "installed()"
 }
 
+//Run when HUB reboots
+def initialize() {
+    log.debug "initialize()"
+    configure()
+}
+
 def configure() {
      
     def cmds = []
+    cmds = "zdo bind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0201 {${device.zigbeeId}} {}"
+    cmds += "zdo bind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0B04 {${device.zigbeeId}} {}"
+    
     cmds += zigbee.writeAttribute(0x201, 0x001c, 0x30, (byte) 0x04) //Set SystemMode=Heat
-    cmds += zigbee.configureReporting(0x201, 0x0000, 0x29, 10, pollRate.intValue(),50) //LocalTemperature - int16S
-    cmds += zigbee.configureReporting(0x201, 0x0010, 0x28, 10, pollRate.intValue(),10) //LocalTemperatureCalibration - int8S
-    cmds += zigbee.configureReporting(0x201, 0x0012, 0x29, 10, pollRate.intValue(),100) //OccupiedHeatingSetpoint - int16S
+    cmds += zigbee.configureReporting(0x201, 0x0000, 0x29, 10, pollRate.intValue()) //LocalTemperature - int16S
+    cmds += zigbee.configureReporting(0x201, 0x0010, 0x28, 10, pollRate.intValue()) //LocalTemperatureCalibration - int8S
+    cmds += zigbee.configureReporting(0x201, 0x0012, 0x29, 10, pollRate.intValue()) //OccupiedHeatingSetpoint - int16S
     cmds += zigbee.configureReporting(0x201, 0x001c, 0x30, 10, pollRate.intValue()) //SystemMode - Enum8
-    cmds += zigbee.configureReporting(0xB04, 0x050B, 0x29, 10, pollRate.intValue(),50) //ActivePower - int16S
+    cmds += zigbee.configureReporting(0xB04, 0x050B, 0x29, 10, pollRate.intValue()) //ActivePower - int16S
 
-    if (verbose==true) {log.info "Configuring thermostat - Driver version : 0.30"}
-    if (debug==true) {log.debug ("PollRate: $pollRate")} 
+    if (verbose==true) {log.info "Configuring thermostat - Driver version : "+version()}
     if (debug==true) {log.debug (cmds)}
     return cmds + refresh()
 }
@@ -59,10 +70,17 @@ def updated() {
 }
 
 def parse(String description) {
-    def descMap = zigbee.parseDescriptionAsMap(description)
-    if (debug==true) {log.debug (descMap)}
+    if (debug==true) {log.debug ("Parsing")}
     def map = [:]
-    if (description?.startsWith("read attr -")) {
+    
+     if (description?.startsWith('zone status')) {
+        if (verbose==true){log.info "Zone status changed. Refreshing sensors."}
+        //runIn( 3, refresh, [overwrite: true])
+    }
+    else if (description?.startsWith("catchall") || description?.startsWith("read attr"))
+    {
+        def descMap = zigbee.parseDescriptionAsMap(description)
+        if (debug==true) {log.debug (descMap)}
         if (descMap.cluster == "0201" && descMap.attrId == "0000")
         {
             map.name = "temperature"
@@ -107,21 +125,22 @@ def parse(String description) {
         }
     }
 
-    def result = null
-    if (map) {
-        result = createEvent(map)
-    }
-    return result
+    if (map != [:]) {
+		return createEvent(map)
+	} else
+		return [:]
 }
 
 def refresh() {
+    if (verbose==true){log.info "refreshed"}
     def cmds = []
-    cmds += zigbee.readAttribute(0x201, 0x0000) //Read LocalTemperature Attribute
-    cmds += zigbee.readAttribute(0x201, 0x0010) //Read LocalTemperatureCalibration
-    cmds += zigbee.readAttribute(0x201, 0x0012) //Read OccupiedHeatingSetpoint 
-    cmds += zigbee.readAttribute(0x201, 0x001c) //Read SystemMode
-    cmds += zigbee.readAttribute(0x0b04, 0x050b) // Read ActivePower 
-    if (verbose==true) {log.info "refreshed"}
+
+    cmds = zigbee.readAttribute(0x0201, 0x0000, [destEndpoint: 0x01],2000) //Read LocalTemperature Attribute
+    cmds += zigbee.readAttribute(0x0201, 0x0010, [destEndpoint: 0x01],2000) //Read LocalTemperatureCalibration
+    cmds += zigbee.readAttribute(0x0201, 0x0012, [destEndpoint: 0x01],2000) //Read OccupiedHeatingSetpoint 
+    cmds += zigbee.readAttribute(0x0201, 0x001c, [destEndpoint: 0x01],2000) //Read SystemMode
+    cmds += zigbee.readAttribute(0x0b04, 0x050b, [destEndpoint: 0x01],2000) //Read ActivePower 
+
     runIn( pollRate, refresh, [overwrite: true])
     return cmds
 }   
