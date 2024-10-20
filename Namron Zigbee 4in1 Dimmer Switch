@@ -1,0 +1,127 @@
+/**
+    Hubitat driver for Namron Zigbee 4in1 Dimmer Switch
+    Author: Tjomp
+*/
+
+static String version() { "0.11" }
+static String releasedate() { "20.october.2024" }
+
+metadata {
+   definition (name: "Namron Zigbee 4in1 Dimmer Switch", namespace: "Tjomp", author: "Tjomp") {
+      capability "Initialize"
+      capability "Configuration"
+      capability "Refresh"
+      capability "Battery"
+      capability "VoltageMeasurement"
+      capability "Switch"
+      capability "SwitchLevel"
+
+   }
+    
+
+   preferences {
+        input name: "verbose",   type: "bool", title: "<b>Enable verbose logging?</b>",   description: "<br>", defaultValue: true 
+        input name: "debug",   type: "bool", title: "<b>Enable debug logging?</b>",   description: "<br>", defaultValue: false
+        input name: "pollRate", type: "number", title: "Poll Rate", description: "Number of seconds between 20 and 3600. Sets how often sensors readings are updated", range: "15..3600", defaultValue: 120
+   }
+}
+
+// Run when driver is installed
+def installed() {
+   log.debug "installed()"
+   def verbose = true
+   def debug = false
+   def pollRate = 120
+    
+}
+
+//Run when HUB reboots
+def initialize() {
+    log.debug "initialize()"
+    configure()
+}
+
+def configure() {
+     
+    def cmds = []
+    cmds = "zdo bind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0001 {${device.zigbeeId}} {}"
+    cmds += "zdo bind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0500 {${device.zigbeeId}} {}"
+    
+    //List configureReporting(Integer clusterId, Integer attributeId, Integer dataType, Integer minReportTime, Integer maxReportTime, Integer reportableChange = null, Map additionalParams=[:], int delay = STANDARD_DELAY_INT)   
+    cmds += zigbee.configureReporting(0x0001, 0x0020, 0x20, 10, pollRate.intValue()) //Battery Voltage
+    cmds += zigbee.configureReporting(0x0001, 0x0021, 0x20, 10, pollRate.intValue()) //Battery percentage remaining
+
+    if (verbose==true){log.info "Configuring Namron 4in1 Dimmer Switch - Driver version : "+version()}
+    if (debug==true) {log.debug (cmds)}
+    return cmds + refresh()
+}
+
+def updated() {
+    configure()
+}
+
+def refresh() {
+    if (verbose==true){log.info "refreshed"}
+    
+    def cmds = []  
+    
+    cmds = zigbee.readAttribute(0x0001, 0x0020, [destEndpoint: 0x01],2000) //Read Battery Voltage 
+    cmds += zigbee.readAttribute(0x0001, 0x0021, [destEndpoint: 0x01],2000) //Read Battery percentage remaining 
+
+    runIn( pollRate, refresh, [overwrite: true])
+    return cmds
+}  
+
+def parse(String description) {
+    if (debug==true) {log.debug ("Parsing")}   
+    def map = [:]
+    if (description?.startsWith('zone status')) {
+        if (verbose==true){log.info "Zone status changed. Refreshing sensors."}
+        runIn( 3, refresh, [overwrite: true])
+    }
+    else if (description?.startsWith("catchall") || description?.startsWith("read attr"))
+    {      
+        def descMap = zigbee.parseDescriptionAsMap(description)
+        if (debug==true) {log.debug (descMap)}
+        
+        if (descMap.cluster == "0001" && descMap.attrId == "0021")
+        {
+            map.name = "battery"
+            map.value = Integer.parseInt(descMap.value, 16)/2
+            sendEvent(name:"battery", value:map.value)
+            if (verbose==true){log.info "Received Battery state: $map.value percent"}
+        }
+        else if (descMap.cluster == "0001" && descMap.attrId == "0020") {
+            map.name = "voltage"
+            map.value = Integer.parseInt(descMap.value, 16)/10
+            sendEvent(name:"voltage", value:map.value)
+            if (verbose==true){log.info "Received Voltage state: $map.value volt"}
+        }
+        else if (descMap.clusterInt == 6 && descMap.command == "00") {
+            sendEvent(name: "switch", value: "off")
+            if (verbose==true){log.info "Button pushed: Switch off"}
+        }
+        else if (descMap.clusterInt == 6 && descMap.command == "01") {
+            sendEvent(name: "switch", value: "on")
+            if (verbose==true){log.info "Button pushed: Switch on"}
+        } 
+        else if (descMap.clusterInt == 8 && descMap.command == "04") {
+            def intValue = Integer.parseInt(descMap.data[0], 16)
+            map.value = (intValue / 255) * 100
+            sendEvent(name: "level", value: map.value)
+            if (verbose==true){log.info "Button turned: $map.value"}
+        } 
+    }
+
+    if (map != [:]) {
+		return createEvent(map)
+	} else
+		return [:]
+}
+def on() {
+   zigbee.on()
+}
+
+def off() {
+   zigbee.off()
+}
