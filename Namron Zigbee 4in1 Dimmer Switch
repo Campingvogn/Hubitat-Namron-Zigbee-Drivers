@@ -3,7 +3,7 @@
     Author: Tjomp
 */
 
-static String version() { "0.11" }
+static String version() { "0.12" }
 static String releasedate() { "20.october.2024" }
 
 metadata {
@@ -87,7 +87,7 @@ def parse(String description) {
         if (descMap.cluster == "0001" && descMap.attrId == "0021")
         {
             map.name = "battery"
-            map.value = Integer.parseInt(descMap.value, 16)/2
+            map.value = Integer.parseInt(descMap.value, 16)
             sendEvent(name:"battery", value:map.value)
             if (verbose==true){log.info "Received Battery state: $map.value percent"}
         }
@@ -98,18 +98,15 @@ def parse(String description) {
             if (verbose==true){log.info "Received Voltage state: $map.value volt"}
         }
         else if (descMap.clusterInt == 6 && descMap.command == "00") {
-            sendEvent(name: "switch", value: "off")
-            if (verbose==true){log.info "Button pushed: Switch off"}
+            off()
         }
         else if (descMap.clusterInt == 6 && descMap.command == "01") {
-            sendEvent(name: "switch", value: "on")
-            if (verbose==true){log.info "Button pushed: Switch on"}
+            on()
         } 
         else if (descMap.clusterInt == 8 && descMap.command == "04") {
             def intValue = Integer.parseInt(descMap.data[0], 16)
             map.value = (intValue / 255) * 100
-            sendEvent(name: "level", value: map.value)
-            if (verbose==true){log.info "Button turned: $map.value"}
+            setLevel (map.value, 0)
         } 
     }
 
@@ -119,9 +116,18 @@ def parse(String description) {
 		return [:]
 }
 def on() {
-   zigbee.on()
+    sendEvent(name: "switch", value: "on")
+    if (verbose==true){log.info "Switch on"}
 }
 
 def off() {
-   zigbee.off()
+    sendEvent(name: "switch", value: "off")
+    if (verbose==true){log.info "Switch off"}
+}
+def setLevel (level, duration) {
+    def isOn = device.currentValue("switch") == "on"
+    if (isOn){
+        sendEvent(name: "level", value: level)
+        if (verbose==true){log.info "Level: $level"}
+    }
 }
